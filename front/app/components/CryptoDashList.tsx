@@ -22,7 +22,7 @@ const dummyCryptoData: Crypto[] = [
 const CryptoListComponent: React.FC = () => {
     const [cryptos, setCryptos] = useState<Crypto[]>([]);
     const [selectedCrypto, setSelectedCrypto] = useState<Crypto | null>(null);
-    let {symbol,setSymbol} = useContext(CryptoContext)
+    let { symbol, setSymbol } = useContext(CryptoContext)
    
     // Simuler une récupération de données, ou utiliser une API ici
     useEffect(() => {

@@ -97,7 +97,8 @@ const calculateBollingerBands = (data: Candle[], period: number, stdDevFactor: n
 };
 
 const ChartComponent: React.FC = () => {
-    let {symbol} = useContext(CryptoContext)
+    let { symbol } = useContext(CryptoContext)
+
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
     const seriesRef = useRef<CandlestickSeriesApi | null>(null);
@@ -120,8 +121,19 @@ const ChartComponent: React.FC = () => {
         low: Math.min(candle.low, newValue),
         high: Math.max(candle.high, newValue),
     });
-    const initializeChart = async () => {
-        const historicalData = await historyPrice(symbol, selectedTimeframe);
+
+
+
+
+
+    const initializeChart = async (cryptoSymbol: string) => {
+
+        const currentSymbol = cryptoSymbol;
+
+
+        // console.log("current Before crypto: ", cryptoSymbol);
+        const historicalData = await historyPrice(currentSymbol, selectedTimeframe);
+        // console.log("current After crypto: ", cryptoSymbol);
         seriesRef.current?.setData(historicalData);
 
         // Mettre à jour les indicateurs
@@ -147,26 +159,32 @@ const ChartComponent: React.FC = () => {
         let count = 0
         // Gérer les mises à jour en temps réel
         const intervalId = setInterval(async () => {
-            count++
-            const latestCandle = await latestPrice(symbol);
-            const lastCandle = historicalData[historicalData.length - 1];
-            console.log(latestCandle)
-            console.log(historicalData)
-            if (count < 5) {
-                // Mettre à jour la dernière bougie
-                const updatedCandle = updateCandle(lastCandle, latestCandle.close);
-                try {
-                    
-                    seriesRef.current?.update(updatedCandle);
-                } catch (error) {
-                    
-                }
-            } else {
-                // Ajouter une nouvelle bougie
-                seriesRef.current?.update(latestCandle);
-                historicalData.push(latestCandle);
-                count = 0
+            // Vérifier si le symbole a changé
+            if (currentSymbol !== symbol) {
+                clearInterval(intervalId);
+                return;
             }
+
+            try {
+                const latestCandle = await latestPrice(currentSymbol);
+                // Vérifier à nouveau si le symbole n'a pas changé
+                if (currentSymbol !== symbol) {
+                    clearInterval(intervalId);
+                    return;
+                }
+
+                const lastCandle = historicalData[historicalData.length - 1];
+
+                if (count < 5) {
+                    const updatedCandle = updateCandle(lastCandle, latestCandle.close);
+                    seriesRef.current?.update(updatedCandle);
+                } else {
+                    seriesRef.current?.update(latestCandle);
+                    historicalData.push(latestCandle);
+                    count = 0;
+                }
+                count++;
+
             
 
             // Mettre à jour les indicateurs
@@ -187,9 +205,16 @@ const ChartComponent: React.FC = () => {
                 bollingerSeriesRefs.current.middle?.setData(bollingerData.middle);
                 bollingerSeriesRefs.current.lower?.setData(bollingerData.lower);
             }
-        }, 10000); // Mise à jour toutes les 10 secondes
+        }catch (error) {
+                    console.error('Error updating candle:', error);
+                }
+            }, 10000);
         return () => clearInterval(intervalId);
     };
+
+
+
+
     useEffect(() => {
         if (!chartContainerRef.current) return;
 
@@ -255,15 +280,35 @@ const ChartComponent: React.FC = () => {
         };
     }, []);
 
+
+
+
+
+
     useEffect(() => {
-        
-        if (!chartRef.current || !seriesRef.current) return;
-
-        
-
-        initializeChart();
-    }, [selectedTimeframe, showMA, showBollinger,symbol]);
-
+        let cleanup: (() => void) | undefined;
+    
+        const init = async () => {
+            if (!chartRef.current || !seriesRef.current) return;
+            
+            // Nettoyer l'intervalle précédent
+            if (cleanup) {
+                cleanup();
+            }
+            
+            cleanup = await initializeChart(symbol);
+        };
+    
+        init();
+    
+        // Nettoyer lors du démontage ou du changement de dépendances
+        return () => {
+            if (cleanup) {
+                cleanup();
+            }
+        };
+    }, [selectedTimeframe, showMA, showBollinger, symbol]);
+    
     // Gérer la visibilité des MA
     useEffect(() => {
         maSeriesRefs.current.forEach(series => {
@@ -276,7 +321,13 @@ const ChartComponent: React.FC = () => {
         Object.values(bollingerSeriesRefs.current).forEach(series => {
             series?.applyOptions({ visible: showBollinger });
         });
-    }, [showBollinger]);
+    }, [showBollinger, symbol]);
+
+
+
+    useEffect(() => {
+        console.log('Current symbol from context:', symbol);
+    }, [symbol]);
 
     return (
         <div>
