@@ -1,0 +1,5 @@
+numpy
+pandas  # Version plus récente compatible avec Python 3.12
+flask
+pyspark
+flask-cors

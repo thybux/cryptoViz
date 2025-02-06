@@ -1,0 +1,135 @@
+version: "3.8"
+
+services:
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:latest
+    container_name: kafka-exporter
+    command:
+      - --kafka.server=kafka:29092
+      - --topic.filter=crypto_current
+      - --web.listen-address=:9308
+      - --log.level=debug # Ajout des logs de debug
+    ports:
+      - "9308:9308"
+    depends_on:
+      kafka:
+        condition: "service_started"
+
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: prometheus
+  #   volumes:
+  #     - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+  #     - prometheus_data:/prometheus
+  #   command:
+  #     - '--config.file=/etc/prometheus/prometheus.yml'
+  #     - '--storage.tsdb.path=/prometheus'
+  #     - '--web.console.libraries=/etc/prometheus/console_libraries'
+  #     - '--web.console.templates=/etc/prometheus/consoles'
+  #   ports:
+  #     - "9090:9090"
+  #   depends_on:
+  #     - kafka-exporter
+
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   container_name: grafana
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - GF_SECURITY_ADMIN_USER=admin
+  #     - GF_SECURITY_ADMIN_PASSWORD=admin
+  #     - GF_USERS_ALLOW_SIGN_UP=false
+  #   volumes:
+  #     - grafana_data:/var/lib/grafana
+  #     - ./grafana/provisioning:/etc/grafana/provisioning
+  #     - ./grafana/dashboards:/var/lib/grafana/dashboards
+  #   depends_on:
+  #     - prometheus
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9999:9999"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_JMX_PORT: 9999
+      KAFKA_JMX_OPTS: "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=kafka"
+
+  spark-master:
+    image: bitnami/spark:latest
+    container_name: spark-master
+    user: root
+    environment:
+      - SPARK_MODE=master
+      - SPARK_HOME=/opt/bitnami/spark
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_LOCAL_DIRS=/opt/bitnami/spark/data
+      - SPARK_WORKER_DIR=/opt/bitnami/spark/data
+      - SPARK_LOG_DIR=/opt/bitnami/spark/data/logs
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - ./scripts/spark:/opt/bitnami/spark/scripts
+      - ./data:/opt/bitnami/spark/data
+    command: ["bash", "/opt/bitnami/spark/scripts/start-services.sh"]
+    restart: unless-stopped
+
+  spark-worker:
+    image: bitnami/spark:latest
+    container_name: spark-worker
+    user: "1001"
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=4G
+      - SPARK_WORKER_CORES=2
+    volumes:
+      - ./data:/opt/bitnami/spark/data
+    depends_on:
+      - spark-master
+
+  crypto-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    volumes:
+      - ./scripts:/app
+      - ./data:/opt/bitnami/spark/data
+    ports:
+      - "6060:5000"
+    depends_on:
+      - spark-master
+
+  scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile.scraper
+
+volumes:
+  prometheus_data:
+  grafana_data:

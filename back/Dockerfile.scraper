@@ -1,0 +1,12 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY scripts/producer .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copier le script
+COPY ./scripts/producer/crypto_producer.py .
+
+CMD ["python", "crypto_producer.py"]

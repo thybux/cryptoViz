@@ -1,0 +1,15 @@
+FROM python:3.9-slim
+WORKDIR /app
+
+# Installation des dépendances
+RUN apt-get update && \
+    apt-get install -y openjdk-17-jdk && \
+    apt-get clean
+
+COPY requirements.txt requirements.txt
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY ./scripts/api_service.py ./api_service.py
+
+CMD ["python", "api_service.py"]

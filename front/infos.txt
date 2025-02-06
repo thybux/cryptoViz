@@ -1,0 +1,6 @@
+Ajouter des indicateurs techniques sur la plateforme
+- une partie liste des crypto
+- fonctionnalité de trie des cryptos: 'marketCap', "les plus trader",
+- stocker les données à la journée puis redécouper par Minutes / heures
+- faire un graphique chandelier
+- créer une documentation par service
